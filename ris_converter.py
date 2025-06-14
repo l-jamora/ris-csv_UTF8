@@ -15,8 +15,8 @@ def test_ris_file_exists(ris_path):
     """
     if ris_path.endswith(".ris"):
         try:
-            open(ris_path, 'r')
-            return True
+            with open(ris_path, 'r', encoding='utf-8'):
+                return True
         except IOError:
             print("That path appears invalid. Please try again.\n")
             return False
@@ -55,7 +55,6 @@ def main(): # pylint: disable=R0914
     ris_path = input("> ")
 
     if test_ris_file_exists(ris_path) is False:
-        
         main()
         exit(0)
 
@@ -73,63 +72,67 @@ def main(): # pylint: disable=R0914
             print("here1")
             std_path = application_path.replace("ris_converter", 
                                                 "RIS_stds.csv")
-            ris_std = open(std_path, 'r')
+            with open(std_path, 'r', encoding='utf-8') as ris_std:
+                ris_std_content = ris_std.read()
         except:
             print("here2")
             std_path = application_path2 + "/RIS_stds.csv"
-            ris_std = open(std_path, 'r')
+            with open(std_path, 'r', encoding='utf-8') as ris_std:
+                ris_std_content = ris_std.read()
     else:
         print("here3")
         application_path = os.path.dirname(os.path.abspath(__file__))
         std_path = application_path + "/RIS_stds.csv"
-        ris_std = open(std_path, 'r')
+        with open(std_path, 'r', encoding='utf-8') as ris_std:
+            ris_std_content = ris_std.read()
 
-    
-    csv_file = open(csv_path, 'w', newline='')  
-    # ^ 'newline=""' is required to not print a space after each row in 
-    # windows. 
-    writer = csv.writer(csv_file, dialect='excel')
-    column_num = {}
-    row = blank_row()
-    for i, line in enumerate(ris_std):
-        line_token_list = line.split(",")
-        column_num[line_token_list[0]] = int(line_token_list[2]) - 1
-        row[i] = "{0} ({1})".format(line_token_list[1], line_token_list[0])
-    ris_std.close()
-    writer.writerow(row)
-    row = blank_row()
+    with open(csv_path, 'w', newline='', encoding='utf-8') as csv_file:  
+        # ^ 'newline=""' is required to not print a space after each row in 
+        # windows. 
+        writer = csv.writer(csv_file, dialect='excel')
+        column_num = {}
+        row = blank_row()
+        for i, line in enumerate(ris_std_content.splitlines()):
+            line_token_list = line.split(",")
+            column_num[line_token_list[0]] = int(line_token_list[2]) - 1
+            row[i] = "{0} ({1})".format(line_token_list[1], line_token_list[0])
+        writer.writerow(row)
+        row = blank_row()
 
+        try:
+            with open(ris_path, 'r', encoding='utf-8') as ris_file:
+                ris_text = ris_file.read()
+        except UnicodeDecodeError:
+            print("Error: Unable to decode the RIS file. It may use a different encoding.")
+            return
 
-    ris_file = open(ris_path, 'r')
-    ris_text = ris_file.read()
-    ris_text = ris_text.replace("\n", " ")
-    ris_file.close()
-    regex = re.compile(
-        r'(?<=([A-Z][A-Z0-9]  - ))(.*?)(?=([A-Z][A-Z0-9]  - ))')
-    # ^ This uses a "positive lookbehind" [(?<=...)] to start the match after
-    # '...', then uses a non-greedy (?) wildcard to iteratively move forward
-    # until BEFORE the final matched expression , which is done with a
-    # positive lookahead [(?=...)]
-    matches = re.findall(regex, ris_text)  # Create a list with .findall()
-    print("Here are all the matches for your regex: ")
-    for match in matches:
-        ris_id = match[0][0] + match[0][1]
-        ris_data = match[1]
-        row[column_num[ris_id]] = ris_data
+        ris_text = ris_text.replace("\n", " ")
+        regex = re.compile(
+            r'(?<=([A-Z][A-Z0-9]  - ))(.*?)(?=([A-Z][A-Z0-9]  - ))')
+        # ^ This uses a "positive lookbehind" [(?<=...)] to start the match after
+        # '...', then uses a non-greedy (?) wildcard to iteratively move forward
+        # until BEFORE the final matched expression , which is done with a
+        # positive lookahead [(?=...)]
+        matches = re.findall(regex, ris_text)  # Create a list with .findall()
+        print("Here are all the matches for your regex: ")
+        for match in matches:
+            ris_id = match[0][0] + match[0][1]
+            ris_data = match[1]
+            row[column_num[ris_id]] = ris_data
+            print("""
+            ris_id = {0}
+            ris_data = {1}
+                  """.format(ris_id, ris_data))
+            if ris_id == "ER":
+                writer.writerow(row)
+                row = blank_row()
+
         print("""
-        ris_id = {0}
-        ris_data = {1}
-              """.format(ris_id, ris_data))
-        if ris_id == "ER":
-            writer.writerow(row)
-            row = blank_row()
-    csv_file.close()
-    print("""
-    Conversion process complete. 
-    
-    Your new file is located here: {0}
-    
-    """.format(os.path.abspath(csv_path)))
+        Conversion process complete. 
+        
+        Your new file is located here: {0}
+        
+        """.format(os.path.abspath(csv_path)))
 
     return
 
